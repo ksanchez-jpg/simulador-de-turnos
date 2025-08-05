@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import math
-from datetime import datetime, timedelta
 
 # ---
 # Data from the provided image (fixed data for demonstration)
@@ -92,48 +91,44 @@ if st.button(f"Calcular Requerimiento para {selected_cargo}"):
     
     st.header("3. Programación de Turnos (4 Semanas)")
     
-    # Use the calculated required number of operators for the schedule
-    total_required = math.ceil(theoretical_required_operators)
+    # --- NUEVA LÓGICA DE CÁLCULO ---
+    # La cantidad de operadores por turno es el requerimiento por turno de la tabla
+    # del usuario.
+    operators_per_shift = required_per_shift
+
+    # Define the working cycle (e.g., 21 working days over 4 weeks for 42 hours/week)
+    total_working_days = math.ceil(max_weekly_hours * 4 / hours_per_shift)
+    cycle_length_days = 28 # Total days in 4 weeks
     
-    # Calculate operators per shift group (Regla 6)
-    operators_per_shift_group = math.ceil(total_required / num_shifts)
+    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    # Generate the schedule for the required personnel
-    if total_required > 0:
-        # Define the working cycle (e.g., 21 working days over 4 weeks for 42 hours/week)
-        total_working_days = math.ceil(max_weekly_hours * 4 / hours_per_shift) # 42 * 4 / 8 = 21
-        cycle_length_days = 28 # Total days in 4 weeks
+    # Generate a schedule for EACH daily shift group
+    for shift_index in range(num_shifts):
+        st.subheader(f"Programación para Turno {shift_index + 1} ({operators_per_shift} operadores)")
         
         schedule_data = {}
-        day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         
-        # Create a list of shifts for the rotation
-        shifts = [f"TURNO {i+1}" for i in range(num_shifts)]
-        
-        # Stagger the start day for each shift group
-        for shift_group_index in range(num_shifts):
-            for op_index in range(operators_per_shift_group):
-                operator_id = f"OP-{shift_group_index * operators_per_shift_group + op_index + 1}"
-                
-                # Assign the shift rotation
-                operator_schedule = []
-                start_day_offset = (shift_group_index * operators_per_shift_group + op_index) % cycle_length_days
-                
-                for week in range(4):
-                    for day_of_week in range(7):
-                        day_in_cycle = (day_of_week + week * 7 + start_day_offset) % cycle_length_days
-                        
-                        # Apply the working day logic
-                        if day_in_cycle < total_working_days:
-                            assigned_shift = shifts[week % num_shifts]
-                            operator_schedule.append(assigned_shift)
-                        else:
-                            operator_schedule.append("DESCANSA")
-                
-                schedule_data[operator_id] = operator_schedule
+        # This part ensures that operators are correctly divided
+        for op_index in range(operators_per_shift):
+            operator_id = f"OP-{op_index + 1}"
+            
+            operator_schedule = []
+            
+            # Use a staggered start day for each operator within the group
+            start_day_offset = (op_index) % cycle_length_days
+            
+            for week in range(4):
+                for day_of_week in range(7):
+                    day_in_cycle = (day_of_week + week * 7 + start_day_offset) % cycle_length_days
+                    
+                    # Apply the working day logic
+                    if day_in_cycle < total_working_days:
+                        operator_schedule.append("TRABAJA")
+                    else:
+                        operator_schedule.append("DESCANSA")
+            
+            schedule_data[operator_id] = operator_schedule
         
         # Create a DataFrame for a better visualization
         df = pd.DataFrame(schedule_data, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
-        st.write("---")
-        st.subheader(f"Programación de Turnos para {selected_cargo}")
         st.dataframe(df)
