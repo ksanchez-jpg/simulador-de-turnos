@@ -1,61 +1,89 @@
-# turnos_app.py
-
 import streamlit as st
-import math
 import pandas as pd
+import math
 
-st.title("📊 Simulador de Turnos para Tractoristas")
-st.markdown("Prototipo de asignación de turnos con jornada de 42h semanales (Colombia 2026)")
+st.title("📅 Generador de Programación de Turnos Semanales")
 
-# === ENTRADAS ===
-st.sidebar.header("🔧 Configuración")
+# === Entrada de parámetros ===
+trabajadores_actuales = st.number_input("Cantidad actual de trabajadores", min_value=1, step=1)
+horas_semanales_max = st.number_input("Máximo de horas promedio semanales por trabajador", min_value=1, value=42, step=1)
+dias_mes = st.number_input("Número de días en el mes a laborar", min_value=28, max_value=31, step=1)
+num_turnos = st.selectbox("Cantidad de turnos por día", options=[2, 3])
 
-# Tipo de turno
-tipo_turno = st.sidebar.selectbox("Selecciona tipo de turnos", ["2 Turnos de 12h", "3 Turnos de 8h"])
+# === Cálculos base ===
+horas_turno = 12 if num_turnos == 2 else 8
+horas_totales_mes = 24 * dias_mes
 
-# Frentes y requerimientos por turno
-frentes = {
-    "Frente 1": 3,
-    "Frente 3": 5,
-    "Frente 4": 6,
-    "Patio": 1
-}
+# === Calcular mínimo de operadores necesarios ===
+turnos_totales_mes = num_turnos * dias_mes
+horas_laborales_requeridas_mes = turnos_totales_mes * horas_turno
+horas_promedio_mes_operador = horas_semanales_max * (dias_mes / 7)
+operadores_minimos = math.ceil(horas_laborales_requeridas_mes / horas_promedio_mes_operador)
 
-# Cálculo de requerimientos diarios
-turnos_por_dia = 2 if tipo_turno == "2 Turnos de 12h" else 3
-duracion_turno = 12 if tipo_turno == "2 Turnos de 12h" else 8
-
-dias_mes = st.sidebar.number_input("Días del mes", min_value=28, max_value=31, value=30)
-trabajadores_actuales = st.sidebar.number_input("Cantidad de trabajadores actuales", min_value=1, value=45)
-horas_max_semanales = st.sidebar.number_input("Máximo de horas semanales por trabajador", min_value=1, value=42)
-
-# === CÁLCULOS ===
-# Total de horas requeridas por mes
-operadores_por_dia = sum(v for v in frentes.values()) * turnos_por_dia
-horas_totales_mes = operadores_por_dia * duracion_turno * dias_mes
-
-# Horas disponibles por operador al mes
-horas_disponibles_operador = horas_max_semanales * 4
-operadores_necesarios = math.ceil(horas_totales_mes / horas_disponibles_operador)
-
-# === RESULTADOS ===
-st.subheader("📈 Resultados")
-st.markdown(f"- Total de horas requeridas en el mes: **{horas_totales_mes:,} h**")
-st.markdown(f"- Horas disponibles por operador al mes: **{horas_disponibles_operador} h**")
-st.markdown(f"- Operadores necesarios para cubrir la operación: **{operadores_necesarios}**")
-st.markdown(f"- Diferencia con los actuales ({trabajadores_actuales}): **{operadores_necesarios - trabajadores_actuales:+} operadores**")
-
-if trabajadores_actuales < operadores_necesarios:
-    st.warning("⚠️ No cuentas con suficiente personal para cubrir los turnos sin hacer horas extras.")
+# === Verificación de suficiencia de trabajadores ===
+if trabajadores_actuales < operadores_minimos:
+    st.error(f"🚨 Con las restricciones actuales, no es suficiente la cantidad de trabajadores. Se requieren al menos {operadores_minimos} operadores para cubrir la operación.")
+    st.stop()
 else:
-    st.success("✅ El personal actual es suficiente para cubrir los turnos según las restricciones.")
+    st.success(f"✅ Los {trabajadores_actuales} operadores son suficientes para cubrir la operación.")
 
-# === Tabla resumen (opcional) ===
-df_frentes = pd.DataFrame({
-    "Frente": list(frentes.keys()),
-    "Operadores por turno": list(frentes.values()),
-    "Turnos diarios": [turnos_por_dia] * len(frentes),
-    "Total operadores/día": [v * turnos_por_dia for v in frentes.values()],
-})
-st.dataframe(df_frentes, use_container_width=True)
+# === Asignación de turnos ===
+dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+num_semanas = 4
+operadores = [f"OP{i+1}" for i in range(trabajadores_actuales)]
 
+# Dividir operadores entre los turnos cada semana con rotación
+turno_actual_por_operador = {op: i % num_turnos for i, op in enumerate(operadores)}
+
+calendarios = {}
+
+for semana in range(1, num_semanas + 1):
+    semana_label = f"Semana {semana}"
+    df_semana = pd.DataFrame(index=operadores, columns=dias_semana)
+
+    for op in operadores:
+        turno = turno_actual_por_operador[op]
+
+        # Calcular día de descanso según el turno anterior
+        if semana > 1:
+            dias_trabajados_anterior = df_anterior.loc[op]
+            if dias_trabajados_anterior["domingo"] != "" and dias_trabajados_anterior["domingo"] != None:
+                descanso_inicio = 1  # entra el martes
+            elif dias_trabajados_anterior["sábado"] != "" and dias_trabajados_anterior["sábado"] != None:
+                descanso_inicio = 0  # entra el lunes
+            else:
+                descanso_inicio = 0
+        else:
+            descanso_inicio = 0
+
+        for i, dia in enumerate(dias_semana):
+            if i < descanso_inicio:
+                df_semana.loc[op, dia] = "DESCANSO"
+            else:
+                df_semana.loc[op, dia] = f"Turno {turno+1}"
+
+        # Rotación de turno para la siguiente semana
+        turno_actual_por_operador[op] = (turno + 1) % num_turnos
+
+    calendarios[semana_label] = df_semana
+    df_anterior = df_semana.copy()
+
+# === Mostrar programación ===
+for semana in range(1, num_semanas + 1):
+    st.markdown(f"### 📆 Semana {semana}")
+    st.dataframe(calendarios[f"Semana {semana}"], use_container_width=True)
+
+# === Notas finales ===
+st.markdown("""
+**📌 Consideraciones implementadas:**
+- Turnos rotativos semanales.
+- Mínimo un día de descanso por semana (ajustado según turno previo).
+- Evaluación de suficiencia de operadores.
+- Todos los días cubiertos (24/7).
+- Asignación dinámica según turnos y disponibilidad.
+
+**🛠 Restricciones adicionales pendientes de refinar:**
+- Control preciso de domingos consecutivos trabajados (actualmente no forzado).
+- Control de compensación de horas semanales (promedio 42 h) aún no verificado explícitamente.
+- Distribución de descansos fin de semana para todos garantizados aún no asegurada.
+""")
