@@ -1,4 +1,7 @@
 # === PROGRAMACIÓN DE TURNOS DETALLADA ===
+import streamlit as st
+import math
+import pandas as pd
 
 st.subheader(" Programación de Turnos por Semana")
 
