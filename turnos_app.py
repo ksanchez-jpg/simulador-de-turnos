@@ -74,3 +74,49 @@ df_frentes = pd.DataFrame({
 st.markdown("### 📋 Resumen de frentes")
 st.dataframe(df_frentes, use_container_width=True)
 
+import pandas as pd
+
+# === PARÁMETROS ===
+turnos = ["T1", "T2", "T3"]  # Cambiar a 2 turnos si es de 12h
+num_turnos = len(turnos)
+dias_mes = 30
+semanas = 4
+operadores_necesarios = 48  # Valor desde cálculo previo
+
+# === GENERAR OPERADORES ===
+operadores = [f"OP{str(i+1).zfill(2)}" for i in range(operadores_necesarios)]
+
+# === DIVIDIR OPERADORES EN GRUPOS PARA TURNOS ===
+grupo_por_turno = operadores_necesarios // num_turnos
+grupos = [operadores[i * grupo_por_turno:(i + 1) * grupo_por_turno] for i in range(num_turnos)]
+
+# === GENERAR PROGRAMACIÓN CON ROTACIÓN Y DESCANSO ===
+programacion = []
+
+for semana in range(semanas):
+    for turno_idx, grupo in enumerate(grupos):
+        turno_actual = turnos[(turno_idx + semana) % num_turnos]
+        for op in grupo:
+            descanso = (hash(op) + semana) % 7  # Día de descanso rotativo
+            for dia in range(7):
+                dia_mes = semana * 7 + dia
+                if dia_mes >= dias_mes:
+                    break
+                turno = "D" if dia == descanso else turno_actual
+                programacion.append({
+                    "Semana": semana + 1,
+                    "Día del mes": dia_mes + 1,
+                    "Operador": op,
+                    "Turno asignado": turno
+                })
+
+# === CREAR DATAFRAME ===
+df_programacion = pd.DataFrame(programacion)
+
+# === MOSTRAR EN STREAMLIT ===
+import streamlit as st
+
+st.subheader("📅 Programación mensual de turnos por operador")
+st.dataframe(df_programacion, use_container_width=True)
+
+
