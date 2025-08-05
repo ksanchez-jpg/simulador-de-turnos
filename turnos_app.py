@@ -1,6 +1,6 @@
 # === PROGRAMACIÓN DE TURNOS DETALLADA ===
 
-st.subheader("📅 Programación de Turnos por Semana")
+st.subheader(" Programación de Turnos por Semana")
 
 # Crear estructura de programación
 num_operadores = trabajadores_actuales
