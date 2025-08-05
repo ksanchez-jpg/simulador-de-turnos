@@ -70,22 +70,24 @@ if st.button(f"Calcular Requerimiento para {selected_cargo}"):
     # --- Step 3: Perform the core calculation based on total hours ---
     
     # Total hours to be covered per week for this specific cargo
-    # This assumes that the required_per_shift is constant across all shifts and days
     required_weekly_hours = required_per_shift * hours_per_shift * num_shifts * days_per_week_to_work
 
     # Total hours the current staff can cover per week
     available_weekly_hours = actual_count * max_weekly_hours
 
     # Theoretical number of operators required to cover the required weekly hours
-    # We use 'max_weekly_hours' as the denominator because that's the available time per person
     theoretical_required_operators = required_weekly_hours / max_weekly_hours
     
     # --- Step 4: Display results and conclusion ---
     st.subheader(f"Análisis para: **{selected_cargo}**")
     
+    # Displaying actual vs. required operators for clarity
+    st.markdown(f"**Cantidad actual de {selected_cargo}:** `{actual_count}`")
+    st.markdown(f"**Cantidad de {selected_cargo} requeridos:** `{math.ceil(theoretical_required_operators)}`")
+
     st.markdown(f"**Horas semanales que se deben cubrir:** `{required_weekly_hours:.2f}` horas")
     st.markdown(f"**Horas semanales que el personal actual puede cubrir:** `{available_weekly_hours:.2f}` horas")
-    st.markdown(f"**Personal teórico requerido para cubrir:** `{theoretical_required_operators:.2f}` operadores.")
+    
 
     if available_weekly_hours >= required_weekly_hours:
         st.success(f"✅ ¡La cantidad actual de **{selected_cargo}** es suficiente para cubrir los turnos!")
