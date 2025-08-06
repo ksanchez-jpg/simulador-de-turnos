@@ -92,25 +92,18 @@ if st.button(f"Calcular y Generar Programación"):
     
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    # Global counter for unique operator IDs
     operator_counter = 0
-    
-    # Dictionary to hold the final schedule data for all shifts
     all_schedules_data = {}
 
-    # Generate a schedule for EACH daily shift group
     for shift_index in range(num_shifts):
         
         shift_name = f"Turno {shift_index + 1}"
-        
-        # Dictionary to hold data for the current shift group
         current_shift_schedule = {}
 
         st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group}")
         
         for _ in range(operators_per_shift_group):
             
-            # Determine if the current operator is actual or additional
             if operator_counter < actual_count:
                 operator_id = f"OP-{operator_counter + 1}"
             else:
@@ -118,8 +111,6 @@ if st.button(f"Calcular y Generar Programación"):
                 operator_id = f"OP-AD-{additional_op_index + 1}"
 
             operator_schedule = []
-            
-            stagger_offset = operator_counter % 7
             
             for week in range(4):
                 if hours_per_shift == 12: 
@@ -132,6 +123,10 @@ if st.button(f"Calcular y Generar Programación"):
                         days_to_work = math.ceil(max_weekly_hours / hours_per_shift)
                 
                 assigned_shift = f"Turno {((week + shift_index) % num_shifts) + 1}"
+                
+                # Dynamic stagger offset for each week
+                # This ensures the rest days are not always the same
+                stagger_offset = (operator_counter + week * 2) % 7
 
                 for day_of_week in range(7):
                     day_in_rotation = (day_of_week + stagger_offset) % 7
@@ -146,27 +141,19 @@ if st.button(f"Calcular y Generar Programación"):
         
         df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
         st.dataframe(df)
-
-        # Append the current shift's DataFrame to the main dictionary for Excel export
         all_schedules_data[f"Turno {shift_index + 1}"] = df
 
-    # ---
-    # Code to generate the Excel download button
-    # ---
     st.write("---")
     st.subheader("Descargar Programación Completa")
     st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
 
-    # Create an Excel file in memory
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         for shift_name, df_shift in all_schedules_data.items():
             df_shift.to_excel(writer, sheet_name=shift_name)
     
-    # Move to the beginning of the stream to read the data
     output.seek(0)
 
-    # Add the download button to Streamlit
     st.download_button(
         label="Descargar Horario a Excel",
         data=output,
