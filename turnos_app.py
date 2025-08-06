@@ -1,29 +1,44 @@
 import streamlit as st
 import pandas as pd
 import math
-from datetime import datetime, timedelta
+
+st.set_page_config(layout="wide")
 
 # ---
-# Data from the provided image (fixed data for demonstration)
+# 1. Data from the provided tables
 # ---
-cargo_data = {
-    "COSECHADORES": {"actual": 17, "requerido_por_turno": 5},
-    "TRACTORISTAS": {"actual": 45, "requerido_por_turno": 15},
-    "ALZADORES": {"actual": 6, "requerido_por_turno": 2},
-    "SUPERVISORES": {"actual": 9, "requerido_por_turno": 3},
-    "AYUDANTES": {"actual": 18, "requerido_por_turno": 6}
+
+current_operators_data = {
+    "AYUDANTES": {"FRENTE 1": 6, "FRENTE 3": 6, "FRENTE 4": 6, "PATIO": 0, "Total": 18},
+    "ALZADORES": {"FRENTE 1": 6, "FRENTE 3": 0, "FRENTE 4": 0, "PATIO": 0, "Total": 6},
+    "TRACTORISTAS": {"FRENTE 1": 9, "FRENTE 3": 15, "FRENTE 4": 18, "PATIO": 3, "Total": 45},
+    "SUPERVISORES": {"FRENTE 1": 3, "FRENTE 3": 3, "FRENTE 4": 3, "PATIO": 0, "Total": 9},
+    "COSECHADORES": {"FRENTE 1": 0, "FRENTE 3": 7, "FRENTE 4": 10, "PATIO": 0, "Total": 17},
 }
 
+required_per_shift_data = {
+    "AYUDANTES": {"FRENTE 1": 2, "FRENTE 3": 2, "FRENTE 4": 2, "PATIO": 0},
+    "ALZADORES": {"FRENTE 1": 2, "FRENTE 3": 0, "FRENTE 4": 0, "PATIO": 0},
+    "TRACTORISTAS": {"FRENTE 1": 3, "FRENTE 3": 5, "FRENTE 4": 6, "PATIO": 3},
+    "SUPERVISORES": {"FRENTE 1": 1, "FRENTE 3": 1, "FRENTE 4": 1, "PATIO": 0},
+    "COSECHADORES": {"FRENTE 1": 0, "FRENTE 3": 2, "FRENTE 4": 3, "PATIO": 0},
+}
+
+# Calculate total required per cargo
+total_required_per_cargo = {}
+for cargo in required_per_shift_data:
+    total_required_per_cargo[cargo] = sum(required_per_shift_data[cargo].values())
+
 # ---
-# 1. User Inputs
+# 2. User Inputs and Configuration
 # ---
 
 st.title("👨‍💻 Calculadora de Personal por Cargo y Programador de Turnos")
-st.write("Selecciona un cargo y configura las horas para verificar si el personal actual es suficiente.")
+st.write("Selecciona un cargo y configura los parámetros para el cálculo y la programación.")
 
 st.header("1. Configuración de Turnos y Restricciones")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     shift_type = st.selectbox(
@@ -31,24 +46,15 @@ with col1:
         ("3 turnos de 8 horas/día", "2 turnos de 12 horas/día", "4 turnos de 6 horas/día")
     )
 with col2:
-    days_per_week_to_work = st.number_input(
-        "Días a laborar por semana:", min_value=1, max_value=7, value=6, step=1)
-with col3:
     max_weekly_hours = st.number_input(
         "Máx. de horas promedio a la semana por operador:", min_value=1, value=42, step=1)
-with col4:
+with col3:
     selected_cargo = st.selectbox(
         "Selecciona el Cargo a analizar:",
-        list(cargo_data.keys())
+        list(current_operators_data.keys())
     )
 
-# ---
-# 2. Calculation and Results
-# ---
-
-st.header("2. Análisis de Requerimiento de Personal")
-
-if st.button(f"Calcular Requerimiento para {selected_cargo}"):
+if st.button(f"Calcular y Generar Programación para {selected_cargo}"):
     st.write("---")
 
     # --- Step 1: Define shift hours and number of shifts ---
@@ -62,91 +68,77 @@ if st.button(f"Calcular Requerimiento para {selected_cargo}"):
         hours_per_shift = 6
         num_shifts = 4
     
-    # --- Step 2: Extract data for the selected cargo ---
-    actual_count = cargo_data[selected_cargo]['actual']
-    
-    # --- Step 3: Perform the core calculation based on total hours ---
-    required_per_shift = cargo_data[selected_cargo]['requerido_por_turno']
-    required_weekly_hours = required_per_shift * hours_per_shift * num_shifts * days_per_week_to_work
-    available_weekly_hours = actual_count * max_weekly_hours
-    theoretical_required_operators = required_weekly_hours / max_weekly_hours
+    # --- Step 2: Perform the core calculation based on total hours ---
+    required_per_shift = total_required_per_cargo[selected_cargo]
+    actual_count = current_operators_data[selected_cargo]["Total"]
+
+    required_weekly_hours_total = required_per_shift * hours_per_shift * 7 # 7 days of coverage
+    theoretical_required_operators = required_weekly_hours_total / max_weekly_hours
     total_required = math.ceil(theoretical_required_operators)
     
+    # --- Step 3: Display results ---
+    st.header("2. Análisis de Requerimiento de Personal")
     st.subheader(f"Análisis para: **{selected_cargo}**")
+    
     st.markdown(f"**Cantidad actual de {selected_cargo}:** `{actual_count}`")
     st.markdown(f"**Cantidad de {selected_cargo} requeridos:** `{total_required}`")
-    st.markdown(f"**Horas semanales que se deben cubrir:** `{required_weekly_hours:.2f}` horas")
-    st.markdown(f"**Horas semanales que el personal actual puede cubrir:** `{available_weekly_hours:.2f}` horas")
+    st.markdown(f"**Horas semanales que se deben cubrir (cubriendo 7 días):** `{required_weekly_hours_total:.2f}` horas")
 
-    if available_weekly_hours >= required_weekly_hours:
+    if actual_count >= total_required:
         st.success(f"✅ ¡La cantidad actual de **{selected_cargo}** es suficiente para cubrir los turnos!")
-        surplus = actual_count - theoretical_required_operators
-        st.markdown(f"**Sobran operadores:** `{surplus:.2f}` operadores.")
+        deficit = 0
     else:
         st.error(f"❌ La cantidad actual de **{selected_cargo}** es insuficiente para cubrir los turnos.")
-        deficit = theoretical_required_operators - actual_count
-        st.markdown(f"**Operadores adicionales requeridos:** `{math.ceil(deficit)}`")
+        deficit = total_required - actual_count
+        st.markdown(f"**Operadores adicionales requeridos:** `{deficit}`")
         
+    st.write("---")
+
     # ---
     # 3. Final Step: Generate Shift Schedule
     # ---
     
     st.header("3. Programación de Turnos (4 Semanas)")
     
-    # --- LÓGICA DE PROGRAMACIÓN AJUSTADA ---
-    operators_per_shift = math.ceil(total_required / num_shifts)
-    
-    # Work cycle to average 42 hours/week for 4-week period
-    # 12-hour shifts: 4 days (48h) + 3 days (36h) = 84h in 2 weeks -> 42h avg
-    # 8-hour shifts: 5 days (40h) + 6 days (48h) + 5 days (40h) + 5 days (40h) -> 168h in 4 weeks -> 42h avg
-    
-    # The logic below implements a general staggered schedule regardless of shift duration.
-    # It ensures a continuous staggered rotation over 4 weeks.
-    
+    operators_per_shift_group = math.ceil(total_required / num_shifts)
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
+    # Generate a schedule for EACH daily shift group
     for shift_index in range(num_shifts):
-        st.subheader(f"Programación para Turno {shift_index + 1} ({operators_per_shift} operadores)")
+        
+        shift_name = f"Turno {shift_index + 1}"
+            
+        st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group}")
         
         schedule_data = {}
         
-        for op_index in range(operators_per_shift):
-            operator_id = f"OP-{op_index + 1}"
+        for op_index in range(operators_per_shift_group):
+            is_additional = op_index >= actual_count / num_shifts
+            operator_id = f"OP-{op_index + 1}" if not is_additional else f"OP-AD-{op_index - int(actual_count/num_shifts) + 1}"
             
             operator_schedule = []
             
-            # This is a key part of the new logic, to create the 4-on/3-on pattern
-            # and to stagger the start day of each operator.
-            
-            start_day_offset = op_index % 7 
+            # Stagger the start day of each operator's rotation
+            stagger_offset = op_index % 7
             
             for week in range(4):
-                is_4_day_week = (week % 2 == 0) # Week 0 and 2 are 4-day weeks, Week 1 and 3 are 3-day weeks
                 
-                # Check for 12-hour shift type to apply the 4/3 day pattern
-                if hours_per_shift == 12:
+                # Determine work days for the week to average 42 hours/week
+                if hours_per_shift == 12: # 4 days work / 3 days work pattern
+                    days_to_work = 4 if week % 2 == 0 else 3
+                else: # Generic pattern for other shifts
+                    days_to_work = 5 if week % 2 == 0 else 6
                     
-                    days_to_work_this_week = 4 if is_4_day_week else 3
+                # Rotate the shift assignment for the week
+                assigned_shift = f"Turno {((week + shift_index) % num_shifts) + 1}"
+
+                for day_of_week in range(7):
+                    day_in_rotation = (day_of_week + stagger_offset) % 7
                     
-                    for day_of_week in range(7):
-                        day_in_schedule = (day_of_week + start_day_offset) % 7
-                        
-                        if day_in_schedule < days_to_work_this_week:
-                            operator_schedule.append("TRABAJA")
-                        else:
-                            operator_schedule.append("DESCANSA")
-                
-                else: # For other shift types, we can use the previous rotation logic
-                    total_working_days = math.ceil(max_weekly_hours * 4 / hours_per_shift)
-                    cycle_length_days = 28
-                    
-                    for day_of_week in range(7):
-                        day_in_cycle = (day_of_week + week * 7 + op_index) % cycle_length_days
-                        
-                        if day_in_cycle < total_working_days:
-                            operator_schedule.append("TRABAJA")
-                        else:
-                            operator_schedule.append("DESCANSA")
+                    if day_in_rotation < days_to_work:
+                        operator_schedule.append(assigned_shift)
+                    else:
+                        operator_schedule.append("DESCANSA")
             
             schedule_data[operator_id] = operator_schedule
         
