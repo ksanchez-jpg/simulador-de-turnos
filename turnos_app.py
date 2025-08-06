@@ -92,6 +92,9 @@ if st.button(f"Calcular y Generar Programación"):
     
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
+    # Global counter for unique operator IDs
+    operator_counter = 0
+
     # Generate a schedule for EACH daily shift group
     for shift_index in range(num_shifts):
         
@@ -101,24 +104,28 @@ if st.button(f"Calcular y Generar Programación"):
         
         schedule_data = {}
         
-        for op_index in range(operators_per_shift_group):
-            # Differentiate between current and additional staff
-            is_additional = (op_index + 1) > math.ceil(actual_count / num_shifts)
+        for _ in range(operators_per_shift_group):
             
-            operator_id = f"OP-{op_index + 1}" if not is_additional else f"OP-AD-{op_index - math.ceil(actual_count / num_shifts) + 1}"
-            
+            # Determine if the current operator is actual or additional
+            if operator_counter < actual_count:
+                operator_id = f"OP-{operator_counter + 1}"
+            else:
+                additional_op_index = operator_counter - actual_count
+                operator_id = f"OP-AD-{additional_op_index + 1}"
+
             operator_schedule = []
             
-            stagger_offset = op_index % 7
+            # Stagger the start day of each operator's rotation
+            stagger_offset = operator_counter % 7
             
             for week in range(4):
                 if hours_per_shift == 12: 
                     days_to_work = 4 if week % 2 == 0 else 3
                 else: 
-                    # Default balanced pattern for other shifts to meet 42h average
-                    if max_weekly_hours == 42:
-                        days_to_work_for_cycle = math.ceil(max_weekly_hours * 4 / hours_per_shift)
-                        days_to_work = days_to_work_for_cycle // 4
+                    if max_weekly_hours == 42 and hours_per_shift != 12:
+                        # A pattern that works for 8-hour shifts to get a 42h average
+                        work_days_pattern = [6, 5, 5, 5]
+                        days_to_work = work_days_pattern[week]
                     else:
                         days_to_work = math.ceil(max_weekly_hours / hours_per_shift)
                 
@@ -133,6 +140,7 @@ if st.button(f"Calcular y Generar Programación"):
                         operator_schedule.append("DESCANSA")
             
             schedule_data[operator_id] = operator_schedule
+            operator_counter += 1
         
         df = pd.DataFrame(schedule_data, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
         st.dataframe(df)
