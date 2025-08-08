@@ -1,162 +1,100 @@
 import streamlit as st
 import pandas as pd
-import math
-import io
+import numpy as np
 
-# ---
-# 1. User Inputs and Configuration
-# ---
+def run_model():
+    st.title("👨‍🔧 Modelo de Planificación de Personal y Turnos")
+    st.markdown("---")
 
-st.title("👨‍💻 Calculadora de Personal y Programador de Turnos")
-st.write("Ingresa los parámetros de tu operación para calcular el personal requerido y generar los turnos.")
+    # --- ENTRADAS DEL MODELO ---
+    st.header("1. Parámetros del Modelo")
 
-st.header("1. Configuración de Turnos y Personal")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    shift_type = st.selectbox(
-        "Tipo de Turnos:",
-        ("3 turnos de 8 horas/día", "2 turnos de 12 horas/día", "4 turnos de 6 horas/día")
-    )
-with col2:
-    max_weekly_hours = st.number_input(
-        "Máx. de horas promedio a la semana por operador:", min_value=1, value=42, step=1)
-with col3:
-    required_per_shift = st.number_input(
-        "Operadores requeridos por turno (por día):", min_value=1, value=15, step=1)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        cargo_actual = st.text_input("Cargo Actual", "AYUDANTES")
+        total_personal_actual = st.number_input("Número total de personal actual", min_value=1, value=178, step=1)
+        
+    with col2:
+        ausentismo_pct = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=6.27, step=0.1)
+        dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7, step=1)
     
-st.write("---")
-st.subheader("Personal actual")
+    with col3:
+        horas_semanales_promedio = st.number_input("Horas por semana (promedio 3 semanas)", min_value=1, value=42, step=1)
+        tipo_turno = st.selectbox("Configuración de turnos por día", ["2 turnos de 12 horas", "3 turnos de 8 horas"])
 
-col4, col5 = st.columns(2)
-with col4:
-    actual_count = st.number_input(
-        "Cantidad total de personal actual:", min_value=0, value=45, step=1)
-with col5:
-    coverage_days_per_week = st.number_input(
-        "Días a laborar por semana para cobertura:", min_value=1, max_value=7, value=7, step=1)
+    st.markdown("---")
 
-# ---
-# 2. Calculation and Results
-# ---
-
-st.header("2. Análisis de Requerimiento de Personal")
-
-if st.button(f"Calcular y Generar Programación"):
-    st.write("---")
-
-    # --- Step 1: Define shift hours and number of shifts ---
-    if shift_type == "3 turnos de 8 horas/día":
-        hours_per_shift = 8
-        num_shifts = 3
-    elif shift_type == "2 turnos de 12 horas/día":
-        hours_per_shift = 12
-        num_shifts = 2
-    else:  # 4 turnos de 6 horas/día
-        hours_per_shift = 6
-        num_shifts = 4
+    # --- CÁLCULO DE PERSONAL NECESARIO ---
+    st.header("2. Cálculo de Personal Requerido")
     
-    # --- Step 2: Perform the core calculation based on total hours ---
-    required_weekly_hours_total = required_per_shift * hours_per_shift * num_shifts * coverage_days_per_week
-    theoretical_required_operators = required_weekly_hours_total / max_weekly_hours
-    total_required = math.ceil(theoretical_required_operators)
+    if tipo_turno == "2 turnos de 12 horas":
+        horas_por_dia = 24
+        turnos_por_dia = 2
+        horas_por_turno = 12
+    else: # "3 turnos de 8 horas"
+        horas_por_dia = 24
+        turnos_por_dia = 3
+        horas_por_turno = 8
     
-    available_weekly_hours = actual_count * max_weekly_hours
+    min_op_por_turno = st.number_input("Cantidad mínima de operadores por turno", min_value=1, value=5, step=1)
 
-    # --- Step 3: Display results ---
-    st.subheader(f"Resultados del Cálculo:")
+    # Calcular las horas requeridas sin ausentismo
+    horas_requeridas_por_semana = min_op_por_turno * horas_por_dia * dias_a_cubrir
     
-    st.markdown(f"**Personal requerido por turno (ingresado):** `{required_per_shift}`")
-    st.markdown(f"**Cantidad de operadores requeridos (teórico):** `{total_required}`")
-    st.markdown(f"**Cantidad de personal actual:** `{actual_count}`")
-    st.markdown(f"**Horas semanales que se deben cubrir:** `{required_weekly_hours_total:.2f}` horas")
+    # Ajustar por ausentismo
+    horas_requeridas_con_ausentismo = horas_requeridas_por_semana / (1 - (ausentismo_pct / 100))
+    
+    # Personal necesario
+    personal_necesario = np.ceil(horas_requeridas_con_ausentismo / horas_semanales_promedio).astype(int)
 
-    if actual_count >= total_required:
-        st.success(f"✅ ¡El personal actual es suficiente!")
-        deficit = 0
+    st.info(f"Para cubrir las necesidades, con un ausentismo del {ausentismo_pct}%, se requieren **{personal_necesario}** operadores para el cargo de **{cargo_actual}**.")
+
+    # Comparación
+    if personal_necesario > total_personal_actual:
+        st.error(f"⚠️ ¡Atención! El personal actual de {total_personal_actual} es insuficiente. Se necesita contratar o redistribuir **{personal_necesario - total_personal_actual}** personas más.")
+    elif personal_necesario < total_personal_actual:
+        st.success(f"✅ El personal actual de {total_personal_actual} es suficiente.")
     else:
-        st.error(f"❌ El personal actual es insuficiente.")
-        deficit = total_required - actual_count
-        st.markdown(f"**Operadores adicionales requeridos:** `{deficit}`")
+        st.warning("El personal actual es justo el requerido.")
+
+    st.markdown("---")
+
+    # --- PROGRAMACIÓN DE TURNOS SIMPLIFICADA ---
+    st.header("3. Propuesta de Programación de Turnos (Semanal)")
+
+    if personal_necesario > 0:
+        dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        turnos = [f"Turno {i+1} ({horas_por_turno}h)" for i in range(turnos_por_dia)]
         
-    st.write("---")
+        # Simulación de equipos para rotación
+        equipos = [f"Equipo {i+1}" for i in range(turnos_por_dia + 1)] # Un equipo extra para cubrir descansos
 
-    # ---
-    # 3. Final Step: Generate Shift Schedule
-    # ---
-    
-    st.header("3. Programación de Turnos (4 Semanas)")
-    
-    operators_per_shift_group = math.ceil(total_required / num_shifts)
-    
-    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    
-    operator_counter = 0
-    all_schedules_data = {}
+        data_turnos = {
+            "Operador": [f"Operador {i+1}" for i in range(personal_necesario)],
+            "Equipo": [equipos[i % len(equipos)] for i in range(personal_necesario)]
+        }
+        df_operadores = pd.DataFrame(data_turnos)
 
-    for shift_index in range(num_shifts):
+        # Generar un horario de ejemplo para una semana
+        horario = pd.DataFrame(index=df_operadores["Operador"], columns=dias_semana)
         
-        shift_name = f"Turno {shift_index + 1}"
-        current_shift_schedule = {}
+        for idx, row in df_operadores.iterrows():
+            equipo = row["Equipo"]
+            equipo_idx = int(equipo.split(" ")[1]) - 1
 
-        st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group}")
-        
-        for _ in range(operators_per_shift_group):
-            
-            if operator_counter < actual_count:
-                operator_id = f"OP-{operator_counter + 1}"
-            else:
-                additional_op_index = operator_counter - actual_count
-                operator_id = f"OP-AD-{additional_op_index + 1}"
-
-            operator_schedule = []
-            
-            for week in range(4):
-                if hours_per_shift == 12: 
-                    days_to_work = 4 if week % 2 == 0 else 3
-                else: 
-                    if max_weekly_hours == 42 and hours_per_shift != 12:
-                        work_days_pattern = [6, 5, 5, 5]
-                        days_to_work = work_days_pattern[week]
-                    else:
-                        days_to_work = math.ceil(max_weekly_hours / hours_per_shift)
+            for i, dia in enumerate(dias_semana):
+                turno_asignado = (i + equipo_idx) % (turnos_por_dia + 1)
                 
-                assigned_shift = f"Turno {((week + shift_index) % num_shifts) + 1}"
-                
-                # Dynamic stagger offset for each week
-                # This ensures the rest days are not always the same
-                stagger_offset = (operator_counter + week * 2) % 7
+                if turno_asignado < turnos_por_dia:
+                    horario.loc[row["Operador"], dia] = turnos[turno_asignado]
+                else:
+                    horario.loc[row["Operador"], dia] = "DESCANSO"
 
-                for day_of_week in range(7):
-                    day_in_rotation = (day_of_week + stagger_offset) % 7
-                    
-                    if day_in_rotation < days_to_work:
-                        operator_schedule.append(assigned_shift)
-                    else:
-                        operator_schedule.append("DESCANSA")
-            
-            current_shift_schedule[operator_id] = operator_schedule
-            operator_counter += 1
-        
-        df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
-        st.dataframe(df)
-        all_schedules_data[f"Turno {shift_index + 1}"] = df
+        st.markdown(f"**Programación de turnos por semana ({tipo_turno}):**")
+        st.dataframe(horario.head(20))
+        st.markdown("*(Nota: Esta es una programación simplificada para ilustrar la rotación. Un modelo real consideraría las rotaciones mensuales y las horas extra para cumplir el promedio de 42h/semana.)*")
+    else:
+        st.warning("No se puede generar un horario. Por favor, asegúrate de que se requiere al menos un operador.")
 
-    st.write("---")
-    st.subheader("Descargar Programación Completa")
-    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
-
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for shift_name, df_shift in all_schedules_data.items():
-            df_shift.to_excel(writer, sheet_name=shift_name)
-    
-    output.seek(0)
-
-    st.download_button(
-        label="Descargar Horario a Excel",
-        data=output,
-        file_name='programacion_turnos.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+if __name__ == "__main__":
+    run_model()
