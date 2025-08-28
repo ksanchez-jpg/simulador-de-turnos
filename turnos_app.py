@@ -114,4 +114,4 @@ st.markdown(
     #### Notas
     - Incluye ajuste por ausentismo y por vacaciones.
     """
-). 
+)
