@@ -33,7 +33,7 @@ elif cantidad_turnos == 2:
 else:
     # Lógica para turnos mixtos de 8 y 12 horas
     horas_por_turno = 12
-    st.write("Horas por turno (automático): 12 horas la semana 1 y 8 horas las semanas 2 y 3.")
+    st.write("Horas por turno (automático): Combinación de 8 y 12 horas para un promedio balanceado.")
 
 # --- Lógica de Cálculo y Programación ---
 def run_calculation(use_actual_personnel):
@@ -92,24 +92,25 @@ def run_calculation(use_actual_personnel):
         elif cantidad_turnos == 2:
             turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
         else:
-            turnos_horarios = ["06:00 - 18:00 (12 horas)", "18:00 - 06:00 (12 horas)", "06:00 - 14:00 (8 horas)", "14:00 - 22:00 (8 horas)", "22:00 - 06:00 (8 horas)"]
+            turnos_horarios = ["06:00 - 14:00 (8 horas)", "14:00 - 22:00 (8 horas)", "22:00 - 06:00 (8 horas)"]
 
         dias_a_programar = dias_a_cubrir * 3
         dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
-        target_total_hours = 128
+        target_total_hours = horas_promedio_semanal * 3
+        
         horas_totales_por_operador = target_total_hours
-
+        
         st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos mixtos.")
 
         horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_a_usar)}
         
-        base_empleados_por_turno = personal_a_usar // (cantidad_turnos if cantidad_turnos != "Mix" else 2)
-        resto_empleados = personal_a_usar % (cantidad_turnos if cantidad_turnos != "Mix" else 2)
+        base_empleados_por_turno = personal_a_usar // (cantidad_turnos if cantidad_turnos != "Mix" else 3)
+        resto_empleados = personal_a_usar % (cantidad_turnos if cantidad_turnos != "Mix" else 3)
 
         start_index_global = 0
-        for i in range((cantidad_turnos if cantidad_turnos != "Mix" else 2)):
+        for i in range((cantidad_turnos if cantidad_turnos != "Mix" else 3)):
             num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
             end_index_global = start_index_global + num_empleados_este_turno
 
@@ -143,12 +144,14 @@ def run_calculation(use_actual_personnel):
                     turno_base_idx = (i + semana) % 2
                 else: # Mix
                     if semana == 0:
-                        turnos_semanales = [1, 2] # Turnos de 12 horas
                         turno_base_idx = i
+                        turnos_semanales = [1, 2] # Turnos de 12 horas, asignados a los turnos 1 y 2
+                        if i == 2: # En la semana de 12 horas, el turno 3 descansa
+                            turnos_semanales = []
                     else:
-                        turnos_semanales = [3, 4, 5] # Turnos de 8 horas
                         turno_base_idx = i + 2
-                    
+                        turnos_semanales = [3, 4, 5] # Turnos de 8 horas, asignados a los turnos 1, 2 y 3
+                
                 for j in range(num_empleados_este_turno):
                     global_op_idx = start_index_global + j
                     
@@ -163,8 +166,15 @@ def run_calculation(use_actual_personnel):
                         if j in indices_descanso:
                             dia_programacion.append("Descanso")
                         else:
-                            dia_programacion.append(f"Turno {turnos_semanales[j % len(turnos_semanales)]}")
-                            horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + (12 if semana == 0 else 8)
+                            if cantidad_turnos == "Mix" and semana == 0 and i == 2:
+                                dia_programacion.append("Descanso")
+                            else:
+                                if cantidad_turnos == "Mix" and semana == 0:
+                                    dia_programacion.append(f"Turno {turnos_semanales[j % len(turnos_semanales)]}")
+                                    horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + 12
+                                else:
+                                    dia_programacion.append(f"Turno {turnos_semanales[j % len(turnos_semanales)]}")
+                                    horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + 8
                 
                 df_turno[columna] = dia_programacion
 
