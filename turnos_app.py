@@ -22,13 +22,17 @@ operadores_por_turno = st.number_input("Cantidad de operadores requeridos por tu
 
 # Selección de turnos y validación de horas por turno
 st.subheader("Configuración de Turnos")
-cantidad_turnos = st.selectbox("Cantidad de turnos", [2, 3], index=1)
+cantidad_turnos = st.selectbox("Cantidad de turnos", [2, 3, "Mix"], index=1)
 if cantidad_turnos == 3:
     horas_por_turno = 8
     st.write("Horas por turno (automático): 8 horas (para 3 turnos)")
-else:
+elif cantidad_turnos == 2:
     horas_por_turno = 12
     st.write("Horas por turno (automático): 12 horas (para 2 turnos)")
+else:
+    # Lógica para turnos mixtos de 8 y 12 horas
+    horas_por_turno = 10 # Promedio de horas por turno
+    st.write("Horas por turno (automático): Combinación de 8 y 12 horas para un promedio balanceado.")
 
 # --- Lógica de Cálculo y Programación ---
 def run_calculation(use_actual_personnel):
@@ -41,7 +45,7 @@ def run_calculation(use_actual_personnel):
             return
 
         # --- Lógica de Cálculo ---
-        horas_operacion_diarias = cantidad_turnos * horas_por_turno
+        horas_operacion_diarias = cantidad_turnos * horas_por_turno if cantidad_turnos != "Mix" else 24
         horas_trabajo_totales_semanales = dias_a_cubrir * horas_operacion_diarias * operadores_por_turno
         personal_teorico = horas_trabajo_totales_semanales / horas_promedio_semanal
         
@@ -56,7 +60,7 @@ def run_calculation(use_actual_personnel):
         personal_a_usar = personal_actual if use_actual_personnel else personal_final_necesario
         
         # Validar que el personal necesario sea suficiente para cubrir los turnos
-        if personal_a_usar < operadores_por_turno * cantidad_turnos:
+        if personal_a_usar < operadores_por_turno * (3 if cantidad_turnos != "Mix" else 2):
             st.error(f"Error: El personal requerido ({personal_a_usar}) no es suficiente para cubrir los {operadores_por_turno} operadores por turno en {cantidad_turnos} turnos.")
             return
         
@@ -84,26 +88,28 @@ def run_calculation(use_actual_personnel):
         turnos_horarios = []
         if cantidad_turnos == 3:
             turnos_horarios = ["06:00 - 14:00", "14:00 - 22:00", "22:00 - 06:00"]
-        else:
+        elif cantidad_turnos == 2:
             turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
-        
+        else:
+            turnos_horarios = ["06:00 - 18:00 (12 horas)", "06:00 - 14:00 (8 horas)", "14:00 - 22:00 (8 horas)", "22:00 - 06:00 (8 horas)"]
+
         dias_a_programar = dias_a_cubrir * 3
         dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
         target_total_hours = horas_promedio_semanal * 3
-        num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno)
-        horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno
+        num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno) if cantidad_turnos != "Mix" else math.floor(target_total_hours / 10)
+        horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno if cantidad_turnos != "Mix" else num_turnos_por_operador_total * 10
 
         st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas.")
 
         horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_a_usar)}
         
-        base_empleados_por_turno = personal_a_usar // cantidad_turnos
-        resto_empleados = personal_a_usar % cantidad_turnos
+        base_empleados_por_turno = personal_a_usar // (cantidad_turnos if cantidad_turnos != "Mix" else 2)
+        resto_empleados = personal_a_usar % (cantidad_turnos if cantidad_turnos != "Mix" else 2)
 
         start_index_global = 0
-        for i in range(cantidad_turnos):
+        for i in range((cantidad_turnos if cantidad_turnos != "Mix" else 2)):
             num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
             end_index_global = start_index_global + num_empleados_este_turno
 
@@ -129,8 +135,10 @@ def run_calculation(use_actual_personnel):
                 semana = dia // dias_a_cubrir
                 if cantidad_turnos == 3:
                     turno_base_idx = (i + semana) % 3
-                else:
+                elif cantidad_turnos == 2:
                     turno_base_idx = (i + semana) % 2
+                else: # Mix
+                    pass
                     
                 for j in range(num_empleados_este_turno):
                     global_op_idx = start_index_global + j
