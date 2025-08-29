@@ -32,6 +32,8 @@ else:
 
 # --- Lógica de Cálculo y Programación ---
 def run_calculation(use_actual_personnel):
+    # Initialize the dictionary to store dataframes
+    all_turnos_dfs = {}
     try:
         # Validación de valores para evitar errores de cálculo
         if personal_actual <= 0 or dias_a_cubrir <= 0 or horas_promedio_semanal <= 0 or operadores_por_turno <= 0:
