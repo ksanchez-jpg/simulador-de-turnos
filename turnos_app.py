@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import pandas as pd
+import random
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -31,8 +32,8 @@ elif cantidad_turnos == 2:
     st.write("Horas por turno (automático): 12 horas (para 2 turnos)")
 else:
     # Lógica para turnos mixtos de 8 y 12 horas
-    horas_por_turno = 10 # Promedio de horas por turno
-    st.write("Horas por turno (automático): Combinación de 8 y 12 horas para un promedio balanceado.")
+    horas_por_turno = 12
+    st.write("Horas por turno (automático): 12 horas la semana 1 y 8 horas las semanas 2 y 3.")
 
 # --- Lógica de Cálculo y Programación ---
 def run_calculation(use_actual_personnel):
@@ -91,17 +92,16 @@ def run_calculation(use_actual_personnel):
         elif cantidad_turnos == 2:
             turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
         else:
-            turnos_horarios = ["06:00 - 18:00 (12 horas)", "06:00 - 14:00 (8 horas)", "14:00 - 22:00 (8 horas)", "22:00 - 06:00 (8 horas)"]
+            turnos_horarios = ["06:00 - 18:00 (12 horas)", "18:00 - 06:00 (12 horas)", "06:00 - 14:00 (8 horas)", "14:00 - 22:00 (8 horas)", "22:00 - 06:00 (8 horas)"]
 
         dias_a_programar = dias_a_cubrir * 3
         dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
-        target_total_hours = horas_promedio_semanal * 3
-        num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno) if cantidad_turnos != "Mix" else math.floor(target_total_hours / 10)
-        horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno if cantidad_turnos != "Mix" else num_turnos_por_operador_total * 10
+        target_total_hours = 128
+        horas_totales_por_operador = target_total_hours
 
-        st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas.")
+        st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos mixtos.")
 
         horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_a_usar)}
         
@@ -127,18 +127,27 @@ def run_calculation(use_actual_personnel):
                 
                 indices_descanso = []
                 if num_descansando > 0:
-                    start_descanso_idx = (dia * num_descansando) % num_empleados_este_turno
-                    for k in range(num_descansando):
-                        indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
+                    random.seed(dia)
+                    indices_descanso = random.sample(range(num_empleados_este_turno), num_descansando)
 
                 turno_base_idx = i
                 semana = dia // dias_a_cubrir
+                
+                # Turnos para la semana actual
+                turnos_semanales = []
                 if cantidad_turnos == 3:
+                    turnos_semanales = [1, 2, 3]
                     turno_base_idx = (i + semana) % 3
                 elif cantidad_turnos == 2:
+                    turnos_semanales = [1, 2]
                     turno_base_idx = (i + semana) % 2
                 else: # Mix
-                    pass
+                    if semana == 0:
+                        turnos_semanales = [1, 2] # Turnos de 12 horas
+                        turno_base_idx = i
+                    else:
+                        turnos_semanales = [3, 4, 5] # Turnos de 8 horas
+                        turno_base_idx = i + 2
                     
                 for j in range(num_empleados_este_turno):
                     global_op_idx = start_index_global + j
@@ -146,16 +155,16 @@ def run_calculation(use_actual_personnel):
                     if use_actual_personnel and j in indices_descanso:
                         dia_programacion.append("Descanso")
                     elif use_actual_personnel:
-                        dia_programacion.append(f"Turno {turno_base_idx + 1}")
-                        horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
+                        dia_programacion.append(f"Turno {turnos_semanales[j % len(turnos_semanales)]}")
+                        horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + (12 if semana == 0 else 8)
                     elif horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
                         dia_programacion.append("Descanso")
                     else:
                         if j in indices_descanso:
                             dia_programacion.append("Descanso")
                         else:
-                            dia_programacion.append(f"Turno {turno_base_idx + 1}")
-                            horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
+                            dia_programacion.append(f"Turno {turnos_semanales[j % len(turnos_semanales)]}")
+                            horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + (12 if semana == 0 else 8)
                 
                 df_turno[columna] = dia_programacion
 
