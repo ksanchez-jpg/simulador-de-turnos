@@ -1,8 +1,6 @@
 import streamlit as st
 import math
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -75,50 +73,69 @@ class CalculadoraPersonal:
         
         return personal_requerido, detalles
 
+def crear_grafico_barras_simple(personal_actual, personal_requerido):
+    """Crea un gráfico de barras simple usando caracteres"""
+    max_val = max(personal_actual, personal_requerido)
+    escala = 30 / max_val  # Normalizar a 30 caracteres máximo
+    
+    actual_bar = "█" * int(personal_actual * escala)
+    requerido_bar = "█" * int(personal_requerido * escala)
+    
+    return f"""
+```
+Personal Actual   [{personal_actual:2d}] {actual_bar}
+Personal Requerido[{personal_requerido:2d}] {requerido_bar}
+```
+"""
+
 def main():
     # Título principal
     st.title("👥 Calculadora de Personal para Turnos")
+    st.markdown("### Calcula el personal mínimo requerido para cumplir objetivos de horas semanales")
     st.markdown("---")
     
-    # Sidebar para parámetros
-    st.sidebar.header("📊 Parámetros de Configuración")
+    # Layout en columnas para los inputs
+    col_input1, col_input2 = st.columns(2)
     
-    # Inputs del usuario
-    personal_actual = st.sidebar.number_input(
-        "Personal Actual (operadores):",
-        min_value=1,
-        max_value=500,
-        value=12,
-        step=1,
-        help="Número actual de operadores disponibles"
-    )
+    with col_input1:
+        st.subheader("📊 Configuración Básica")
+        personal_actual = st.number_input(
+            "👤 Personal Actual (operadores):",
+            min_value=1,
+            max_value=500,
+            value=12,
+            step=1,
+            help="Número actual de operadores disponibles"
+        )
+        
+        ausentismo_pct = st.slider(
+            "📉 Porcentaje de Ausentismo (%):",
+            min_value=0,
+            max_value=50,
+            value=15,
+            step=1,
+            help="Porcentaje promedio de ausentismo del personal"
+        )
     
-    ausentismo_pct = st.sidebar.slider(
-        "Porcentaje de Ausentismo (%):",
-        min_value=0,
-        max_value=50,
-        value=15,
-        step=1,
-        help="Porcentaje promedio de ausentismo del personal"
-    )
-    
-    horas_objetivo = st.sidebar.number_input(
-        "Horas Objetivo por Semana:",
-        min_value=20.0,
-        max_value=60.0,
-        value=44.0,
-        step=0.5,
-        help="Promedio de horas que debe trabajar cada operador por semana"
-    )
-    
-    horas_turno = st.sidebar.number_input(
-        "Horas por Turno:",
-        min_value=8.0,
-        max_value=24.0,
-        value=12.0,
-        step=0.5,
-        help="Duración de cada turno en horas"
-    )
+    with col_input2:
+        st.subheader("⏰ Configuración de Turnos")
+        horas_objetivo = st.number_input(
+            "🎯 Horas Objetivo por Semana:",
+            min_value=20.0,
+            max_value=60.0,
+            value=44.0,
+            step=0.5,
+            help="Promedio de horas que debe trabajar cada operador por semana"
+        )
+        
+        horas_turno = st.number_input(
+            "⏱️ Horas por Turno:",
+            min_value=8.0,
+            max_value=24.0,
+            value=12.0,
+            step=0.5,
+            help="Duración de cada turno en horas"
+        )
     
     # Crear parámetros
     parametros = ParametrosTurnos(
@@ -132,10 +149,12 @@ def main():
     calculadora = CalculadoraPersonal(parametros)
     personal_requerido, detalles = calculadora.calcular_personal_requerido()
     
-    # Layout principal en columnas
-    col1, col2, col3 = st.columns([2, 2, 2])
+    st.markdown("---")
     
     # Métricas principales
+    st.subheader("📈 Resultados Principales")
+    col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
         st.metric(
             "👤 Personal Actual",
@@ -147,18 +166,34 @@ def main():
         st.metric(
             "👥 Personal Requerido",
             f"{personal_requerido}",
-            delta=f"{detalles['personal_adicional']} adicional" if detalles['personal_adicional'] > 0 else "✅ Suficiente",
+            delta=f"+{detalles['personal_adicional']}" if detalles['personal_adicional'] > 0 else "✅ OK",
             delta_color="inverse" if detalles['personal_adicional'] > 0 else "normal"
         )
     
     with col3:
+        st.metric(
+            "➕ Adicional Necesario",
+            f"{detalles['personal_adicional']}",
+            help="Personal adicional que necesitas contratar"
+        )
+    
+    with col4:
         cobertura = detalles['cobertura_actual']
         st.metric(
-            "📈 Cobertura Actual",
+            "📊 Cobertura Actual",
             f"{cobertura:.1f}%",
-            delta=f"{cobertura-100:.1f}%" if cobertura != 100 else "Perfecto",
+            delta=f"{cobertura-100:.1f}pp" if cobertura != 100 else "Perfecto",
             delta_color="normal" if cobertura >= 100 else "inverse"
         )
+    
+    # Razón de personal - Destacado
+    if detalles['personal_adicional'] > 0:
+        st.error(
+            f"⚠️ **NECESITAS PERSONAL ADICIONAL:** Por cada {detalles['razon_operadores_adicional']:.1f} "
+            f"operadores actuales necesitas **1 operador adicional** para cumplir el objetivo."
+        )
+    else:
+        st.success("✅ **¡EXCELENTE!** Tu personal actual es suficiente para cumplir con el objetivo de horas.")
     
     st.markdown("---")
     
@@ -169,155 +204,98 @@ def main():
         st.subheader("📋 Análisis Detallado")
         
         # Tabla de resultados
-        resultados_df = pd.DataFrame({
+        resultados_data = {
             'Concepto': [
-                'Horas Nominales/Semana',
+                'Horas Nominales/Semana/Persona',
                 'Horas Reales (con ausentismo)',
-                'Horas Objetivo',
-                'Factor de Eficiencia',
+                'Horas Objetivo Requeridas',
+                'Gap de Horas',
+                'Factor de Eficiencia Necesario',
                 'Personal Actual',
-                'Personal Requerido',
-                'Personal Adicional'
+                'Personal Requerido (mínimo)',
+                'Personal Adicional Necesario'
             ],
             'Valor': [
-                f"{detalles['horas_nominales_semana']:.0f} hrs",
-                f"{detalles['horas_disponibles_persona']:.1f} hrs",
-                f"{horas_objetivo:.1f} hrs",
+                f"{detalles['horas_nominales_semana']:.0f} horas",
+                f"{detalles['horas_disponibles_persona']:.1f} horas",
+                f"{horas_objetivo:.1f} horas",
+                f"{horas_objetivo - detalles['horas_disponibles_persona']:.1f} horas",
                 f"{detalles['factor_eficiencia']:.3f}",
                 f"{personal_actual} operadores",
                 f"{personal_requerido} operadores",
                 f"{detalles['personal_adicional']} operadores"
+            ],
+            'Estado': [
+                '📊',
+                '📉' if detalles['horas_disponibles_persona'] < horas_objetivo else '📈',
+                '🎯',
+                '❌' if horas_objetivo > detalles['horas_disponibles_persona'] else '✅',
+                '⚠️' if detalles['factor_eficiencia'] > 1 else '✅',
+                '👤',
+                '👥',
+                '➕' if detalles['personal_adicional'] > 0 else '✅'
             ]
-        })
+        }
         
+        resultados_df = pd.DataFrame(resultados_data)
         st.dataframe(resultados_df, use_container_width=True, hide_index=True)
         
-        # Razón de personal adicional
-        if detalles['personal_adicional'] > 0:
-            st.info(
-                f"📊 **Razón de Personal:** Por cada {detalles['razon_operadores_adicional']:.1f} "
-                f"operadores actuales se necesita **1 operador adicional**"
-            )
-        else:
-            st.success("✅ **El personal actual es suficiente** para cumplir con el objetivo de horas")
-    
     with col_right:
-        st.subheader("📊 Visualización")
+        st.subheader("📊 Comparación Visual")
         
-        # Gráfico de comparación
-        fig_bar = go.Figure(data=[
-            go.Bar(
-                name='Actual',
-                x=['Personal'],
-                y=[personal_actual],
-                marker_color='lightblue',
-                text=[f"{personal_actual}"],
-                textposition='auto',
-            ),
-            go.Bar(
-                name='Requerido',
-                x=['Personal'],
-                y=[personal_requerido],
-                marker_color='orange',
-                text=[f"{personal_requerido}"],
-                textposition='auto',
-            )
-        ])
+        # Gráfico simple con caracteres
+        st.code(crear_grafico_barras_simple(personal_actual, personal_requerido))
         
-        fig_bar.update_layout(
-            title="Personal: Actual vs Requerido",
-            yaxis_title="Número de Operadores",
-            height=400,
-            barmode='group'
-        )
+        # Información adicional
+        st.info(f"""
+        **Resumen Ejecutivo:**
         
-        st.plotly_chart(fig_bar, use_container_width=True)
+        • Con {ausentismo_pct}% de ausentismo
+        • Cada persona trabaja {detalles['horas_disponibles_persona']:.1f}h reales/semana
+        • Objetivo: {horas_objetivo}h/semana
+        • Déficit: {max(0, horas_objetivo - detalles['horas_disponibles_persona']):.1f}h por persona
+        """)
     
     st.markdown("---")
     
     # Análisis de sensibilidad
-    st.subheader("🔍 Análisis de Sensibilidad")
+    st.subheader("🔍 Análisis de Sensibilidad por Ausentismo")
     
-    with st.expander("Ver análisis por diferentes niveles de ausentismo"):
-        # Crear datos para el análisis
-        ausentismos = range(5, 31, 2)  # 5% a 30% en pasos de 2%
-        datos_sensibilidad = []
-        
-        for aus in ausentismos:
-            params_temp = ParametrosTurnos(
-                personal_actual=personal_actual,
-                porcentaje_ausentismo=aus / 100,
-                horas_objetivo_semana=horas_objetivo,
-                horas_por_turno=horas_turno
-            )
-            calc_temp = CalculadoraPersonal(params_temp)
-            req_temp, det_temp = calc_temp.calcular_personal_requerido()
-            
-            datos_sensibilidad.append({
-                'Ausentismo (%)': aus,
-                'Personal Requerido': req_temp,
-                'Personal Adicional': det_temp['personal_adicional'],
-                'Razón': f"1:{det_temp['razon_operadores_adicional']:.1f}" if det_temp['personal_adicional'] > 0 else "Suficiente"
-            })
-        
-        df_sensibilidad = pd.DataFrame(datos_sensibilidad)
-        
-        # Mostrar tabla
-        st.dataframe(df_sensibilidad, use_container_width=True, hide_index=True)
-        
-        # Gráfico de sensibilidad
-        fig_sens = px.line(
-            df_sensibilidad,
-            x='Ausentismo (%)',
-            y='Personal Requerido',
-            title='Personal Requerido vs. Nivel de Ausentismo',
-            markers=True
+    # Crear datos para el análisis
+    ausentismos = list(range(0, 31, 5))  # 0% a 30% en pasos de 5%
+    datos_sensibilidad = []
+    
+    for aus in ausentismos:
+        params_temp = ParametrosTurnos(
+            personal_actual=personal_actual,
+            porcentaje_ausentismo=aus / 100,
+            horas_objetivo_semana=horas_objetivo,
+            horas_por_turno=horas_turno
         )
+        calc_temp = CalculadoraPersonal(params_temp)
+        req_temp, det_temp = calc_temp.calcular_personal_requerido()
         
-        fig_sens.add_hline(
-            y=personal_actual,
-            line_dash="dash",
-            line_color="red",
-            annotation_text=f"Personal Actual ({personal_actual})"
-        )
-        
-        fig_sens.update_layout(height=400)
-        st.plotly_chart(fig_sens, use_container_width=True)
+        datos_sensibilidad.append({
+            'Ausentismo (%)': f"{aus}%",
+            'Personal Requerido': req_temp,
+            'Personal Adicional': det_temp['personal_adicional'],
+            'Razón (actual:adicional)': f"1:{det_temp['razon_operadores_adicional']:.1f}" if det_temp['personal_adicional'] > 0 else "Suficiente",
+            'Estado': '✅ OK' if det_temp['personal_adicional'] == 0 else f"❌ Falta {det_temp['personal_adicional']}"
+        })
     
-    # Exportar resultados
-    st.markdown("---")
-    st.subheader("📥 Exportar Resultados")
+    df_sensibilidad = pd.DataFrame(datos_sensibilidad)
     
-    # Crear reporte para exportar
-    reporte_export = f"""REPORTE DE CÁLCULO DE PERSONAL PARA TURNOS
-===========================================
-
-PARÁMETROS:
-- Personal actual: {personal_actual} operadores
-- Ausentismo: {ausentismo_pct}%
-- Objetivo: {horas_objetivo} horas/semana
-- Horas por turno: {horas_turno} horas
-
-RESULTADOS:
-- Horas nominales por semana: {detalles['horas_nominales_semana']} horas
-- Horas reales (con ausentismo): {detalles['horas_disponibles_persona']:.1f} horas
-- Personal requerido: {personal_requerido} operadores
-- Personal adicional: {detalles['personal_adicional']} operadores
-- Cobertura actual: {detalles['cobertura_actual']:.1f}%
-
-"""
+    # Destacar la fila actual
+    current_row = df_sensibilidad[df_sensibilidad['Ausentismo (%)'] == f"{ausentismo_pct}%"].index
+    if len(current_row) > 0:
+        st.info(f"👆 Tu configuración actual está resaltada: {ausentismo_pct}% de ausentismo")
     
-    if detalles['personal_adicional'] > 0:
-        reporte_export += f"RAZÓN: Por cada {detalles['razon_operadores_adicional']:.1f} operadores se necesita 1 adicional"
-    else:
-        reporte_export += "ESTADO: El personal actual es suficiente"
-    
-    st.download_button(
-        label="📄 Descargar Reporte",
-        data=reporte_export,
-        file_name=f"reporte_personal_turnos_{personal_actual}ops_{ausentismo_pct}aus.txt",
-        mime="text/plain"
+    st.dataframe(
+        df_sensibilidad, 
+        use_container_width=True, 
+        hide_index=True
     )
-
-if __name__ == "__main__":
-    main()
+    
+    # Recomendaciones
+    st.markdown("---")
+    st.sub
